@@ -1,0 +1,13 @@
+.git
+.husky
+node_modules
+.dockerignore
+.vscode
+.env
+.env.example
+.eslintrc.json
+.gitignore
+commitlint.config.js
+compose.yml
+Dockerfile*
+session
