@@ -6,6 +6,6 @@ ADD package*.json /app/
 RUN npm i
 
 ADD main.js /app
-ADD bot /app
+ADD bot /app/bot
 
 CMD ["npm", "run", "dev"]
