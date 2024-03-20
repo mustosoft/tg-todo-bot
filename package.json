@@ -4,7 +4,7 @@
   "description": "Telegram Todo-Check Bot",
   "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "lint": "eslint .",
     "prepare": "husky",
     "dev": "nodemon -e js main.js",
@@ -25,6 +25,7 @@
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-plugin-import": "^2.25.2",
     "husky": "^9.0.11",
+    "jest": "^29.7.0",
     "nodemon": "^3.1.0"
   }
 }
