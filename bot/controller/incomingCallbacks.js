@@ -48,7 +48,8 @@ module.exports = [
             }
 
             await msg.edit({
-                text: msg.text,
+                formattingEntities: msg.entities,
+                text: msg.rawText,
             });
         },
     ],
@@ -77,7 +78,8 @@ module.exports = [
             if (!checked && !unchecked) return;
 
             await msg.edit({
-                text: msg.text,
+                formattingEntities: msg.entities,
+                text: msg.rawText,
             });
         },
     ],
