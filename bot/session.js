@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-const SESSION_FILE = 'session';
+const SESSION_FILE = 'session.bin';
 
 function loadSession() {
     if (!fs.existsSync(SESSION_FILE)) {

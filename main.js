@@ -3,7 +3,7 @@ require('dotenv').config();
 const { TelegramClient } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 
-const { loadSession, saveSession } = require('./bot/session.js');
+const { loadSession, saveSession } = require('./bot/session');
 const { handleEvents } = require('./bot/controller');
 const { sendBotStartedNotification } = require('./bot/controller/adminNotification');
 
