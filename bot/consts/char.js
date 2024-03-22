@@ -1,4 +1,7 @@
 module.exports = {
-    C: '✅',
-    U: '☑',
+    C: '✅', // Checked
+    U: '☑', // Unchecked
+    P: '✏️', // Edit
+    E: '📝', // Editing
+    X: '❌', // Cancel
 };
