@@ -18,5 +18,11 @@ services:
     image: mongo:7.0
     ports:
       - "27017:27017"
+    command: "--replSet rs0"
+    healthcheck:
+      test: test $$(echo "rs.initiate({_id:'rs0',members:[{_id:0,host:\"db:27017\"}]}).ok || rs.status().ok" | mongo --port 27017 --quiet) -eq 1
+      interval: 10s
+      start_period: 5s
+
     volumes:
       - ./mnt/mongo_data:/data/db

@@ -7,7 +7,7 @@
     "test": "jest",
     "lint": "eslint .",
     "prepare": "husky",
-    "dev": "nodemon -e js main.js",
+    "dev": "nodemon --inspect=0.0.0.0:9229 -e js main.js",
     "start": "node main.js"
   },
   "author": "Mustosoft",
