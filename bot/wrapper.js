@@ -1,5 +1,6 @@
 const { StopPropagation } = require('telegram/client/updates');
 
+const { CallbackQueryEvent } = require('telegram/events/CallbackQuery');
 const logger = require('./logger');
 
 /**
@@ -12,11 +13,17 @@ const logger = require('./logger');
 function wrap(func) {
     // eslint-disable-next-line consistent-return
     async function wrappedFunc(...args) {
+        const [arg0] = args;
+
         try {
             return await func(...args);
         } catch (error) {
             if (error instanceof StopPropagation) {
                 throw error;
+            }
+
+            if (arg0 instanceof CallbackQueryEvent) {
+                await arg0.answer({ message: 'Sorry, unable to process your request.' });
             }
 
             logger.error(`${error}\nSTACK: ${error.stack}`);

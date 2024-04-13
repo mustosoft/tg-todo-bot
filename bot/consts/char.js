@@ -4,4 +4,7 @@ module.exports = {
     P: '✏️', // Edit
     E: '📝', // Editing
     X: '❌', // Cancel
+    S: '💾', // Save
+    D: '🗑', // Delete
+    Y: '🆗', // Ok
 };

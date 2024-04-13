@@ -3,22 +3,37 @@
  * @typedef {Array<[RegExp, (event: NewMessageEvent) => Promise<void>]>} PatternHandlers
  */
 
-const { Api: { KeyboardButtonCallback } } = require('telegram/tl/api');
+const { Api } = require('telegram/tl/api');
+
+const { KeyboardButtonCallback } = Api;
 const { StopPropagation } = require('telegram/client/updates');
 
-const { C, U, P } = require('../consts/char');
+const {
+    C, U, P, S,
+} = require('../consts/char');
 const MessageService = require('../services/messages');
+const ListService = require('../services/lists');
 const logger = require('../logger');
 const { trimEmptyLines, removeNewLines } = require('../util/strings');
+const { OID_RE } = require('../consts/var');
+const {
+    getPeerIdFieldName,
+    getIdOfPeer,
+    getTypeOfPeer,
+    syncAllList,
+    saveMessage,
+} = require('../util/message');
+const { messageIsList } = require('../validators/message');
+const { START, ABOUT, HELP } = require('../consts/cmd');
 
-// List of pair of regex and function to handle incoming messages
 /**
+ * List of pair of regex and function to handle incoming messages
  * @type {PatternHandlers}
  */
 module.exports = [
     [
         /.*/,
-        async (event) => {
+        async function handleSaveIncoming(event) {
             await MessageService
                 .create(event.message)
                 .then((saved) => logger.debug('Message saved:', saved));
@@ -26,35 +41,52 @@ module.exports = [
     ],
     [
         /^\/start$/,
-        async (event) => {
-            await event.message.respond({
-                message:
-                    'Welcome to the Todo-Check bot! You can start creating your list by sending me'
-                    + ' a list of items separated by a new line, just like the example below:\n\n'
-                    + '**Complete project report**\n'
-                    + '**Attend team meeting at 2 PM**\n'
-                    + '**Send updated email to clients**\n'
-                    + '\n\n'
-                    + 'You can also use the hashtag (#) at the first line to give a title to your list, like this:\n\n'
-                    + '**# My tasks**\n'
-                    + '**Complete project report**\n'
-                    + '**Attend team meeting at 2 PM**\n'
-                    + '**Send updated email to clients**\n'
-                    + '\n\n'
-                    + '**Try it now!**',
-            });
-
+        async function handleStart(event) {
+            await event.message.respond(START);
             throw new StopPropagation();
         },
     ],
     [
         /^\/about$/,
-        async (event) => {
+        async function handleAbout(event) {
+            await event.message.reply(ABOUT);
+            throw new StopPropagation();
+        },
+    ],
+    [
+        /^\/help$/,
+        async function handleHelp(event) {
+            await event.message.reply(HELP);
+            throw new StopPropagation();
+        },
+    ],
+    [
+        /^\/mylist$/,
+        async function handleMylist(event) {
+            const owner = event.message.fromId || event.message.peerId;
+            const ownerType = getTypeOfPeer(owner);
+            const ownerId = getIdOfPeer(owner);
+
+            const query = {
+                'owner.ownerType': ownerType,
+                'owner.ownerId': Number(ownerId),
+            };
+
+            const lists = await ListService.getMany(query);
+
             await event.message.reply({
                 parseMode: 'html',
-                message:
-                    'This bot is created by <a href="tg://user?id=147948549">Mustosoft</a>\n\n'
-                    + '🌐 <a href="https://mustosoft.dev/">Dev</a>',
+                message: '<b>Your saved lists</b>:',
+                buttons: lists.length ? lists.map((list) => {
+                    const { _id: id, name } = list;
+
+                    return [
+                        new KeyboardButtonCallback({
+                            text: name,
+                            data: Buffer.from(`saved-list:${id}`),
+                        }),
+                    ];
+                }) : null,
             });
 
             throw new StopPropagation();
@@ -62,7 +94,7 @@ module.exports = [
     ],
     [ // Handler for edit list item
         /.+/,
-        async (event) => {
+        async function handleEditItem(event) {
             const replyTo = await event.message.getReplyMessage();
             if (!replyTo) return;
 
@@ -70,18 +102,7 @@ module.exports = [
             if (!listMsg) return;
 
             // Validate if the message is a list
-            const msgIsList = listMsg
-                && listMsg.rawText
-                && listMsg.replyMarkup?.rows?.every?.((row, i, rows) => (i !== rows.length - 1
-                    && row.buttons?.[0]?.data.toString().match(/^li:\d+$/)
-                    && row.buttons?.[1]?.data.toString().match(/^edit(ing)?:li:\d+$/))
-                    || (i === rows.length - 1
-                        && row.buttons?.[0]?.data.toString().match(/^checkAll$/)
-                        && row.buttons?.[1]?.data.toString().match(/^cancelEdit(?::replyToId-(\d+))?$/)
-                        && row.buttons?.[2]?.data.toString().match(/^uncheckAll$/)
-                    ));
-
-            if (!msgIsList) return;
+            if (!messageIsList(listMsg)) return;
 
             const { rows } = listMsg.replyMarkup;
             const text = removeNewLines(event.message.rawText).trim();
@@ -101,15 +122,23 @@ module.exports = [
                         row.buttons = [listButton];
                     }
                 }
+            }
 
-                // Footer buttons
-                if (i === rows.length - 1) {
-                    const [, cancelEditButton] = row.buttons;
-                    const editButton = cancelEditButton;
+            // Footer buttons
+            const [cancelEditButton, saveUnsaveButton] = rows[rows.length - 1].buttons;
+            const editButton = cancelEditButton;
 
-                    editButton.text = `${P} Edit`;
-                    editButton.data = Buffer.from('startEdit');
-                }
+            editButton.text = `${P} Edit`;
+            editButton.data = Buffer.from('startEdit');
+
+            const isSaved = saveUnsaveButton.data.toString().match(RegExp(`^unsave:(?<listId>${OID_RE})`));
+
+            // Also update all list messages if the list is saved
+            if (isSaved) {
+                const { listId } = isSaved.groups;
+                const { client } = event;
+
+                await syncAllList(client, listMsg, listId);
             }
 
             await listMsg.edit({
@@ -124,7 +153,7 @@ module.exports = [
     ],
     [
         /.+/,
-        async (event) => {
+        async function handleNewList(event) {
             if (!event.message?.text) return;
 
             let text = trimEmptyLines(event.message.rawText);
@@ -136,7 +165,10 @@ module.exports = [
 
             if (!text) return;
 
-            await event.message.reply({
+            const ownerPeer = event.message.fromId || event.message.peerId;
+            const owner = `${getPeerIdFieldName(ownerPeer)}:${getIdOfPeer(ownerPeer).toString()}`;
+
+            const listMsg = await event.message.reply({
                 parseMode: 'html',
                 message: `<b>${title || 'Your list'}</b>:`,
                 buttons: text.split('\n').map((item, i) => [
@@ -150,15 +182,23 @@ module.exports = [
                         data: Buffer.from('checkAll'),
                     }),
                     new KeyboardButtonCallback({
+                        text: `${U} Uncheck all`,
+                        data: Buffer.from('uncheckAll'),
+                    }),
+                ], [
+                    new KeyboardButtonCallback({
                         text: `${P} Edit`,
                         data: Buffer.from('startEdit'),
                     }),
                     new KeyboardButtonCallback({
-                        text: `${U} Uncheck all`,
-                        data: Buffer.from('uncheckAll'),
+                        requiresPassword: true,
+                        text: `${S} Save`,
+                        data: Buffer.from(`save:${owner}`),
                     }),
                 ]]),
             });
+
+            await saveMessage(listMsg);
         },
     ],
 ];
